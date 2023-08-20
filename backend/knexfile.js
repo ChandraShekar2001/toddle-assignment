@@ -5,9 +5,9 @@ module.exports = {
     connection: {
       host: "mahmud.db.elephantsql.com",
       port: "5432", // Default PostgreSQL port
-      user: "bnbaqqvc",
-      password: "UoJflQ42F4InfooN-6Pyn4zm3xHHkhVW",
-      database: "bnbaqqvc",
+      user: "emevuucp",
+      password: "q0Tu_yCHhYywxU2ESAjmFYKaAqar99OI",
+      database: "emevuucp",
   },
     useNullAsDefault: true,
 

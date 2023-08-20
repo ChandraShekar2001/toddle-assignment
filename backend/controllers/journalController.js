@@ -8,7 +8,6 @@ const {
   uploadBytes,
   getDownloadURL,
 } = require("firebase/storage");
-const { handleDatabaseError } = require("../utils/handleDatabaseErrors");
 
 const firebaseConfig = {
   apiKey: "AIzaSyDs56M_Z_t9ee42kF0EWDZGTXwAUFnmQzs",
@@ -24,55 +23,57 @@ firebase.initializeApp(firebaseConfig);
 const storage = getStorage();
 
 //creating a journal
-exports.createJournal = async (req, res) => { 
+exports.createJournal = async (req, res) => {
   try {
-    const tid = req.user.id;
-    let {
-      published_at,
-      attachment_type,
-      url,
-      description,
-      taggedStudents,
-    } = req.body;
-
+    const teacherId = req.user.id;
+    console.log(teacherId);
+    let { publishedAt, attachmentType, url, description, taggedStudents } =
+      req.body;
+    if (attachmentType === "4" && !url) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing parameter url",
+      });
+    }
     const file = req.file;
-    //attachment_type == 4 indicated it is a url
+    console.log(file);
+    //attachmentType == 4 indicated it is a url
     //so we dont have to upload it to firebase as it is already a link
-    if (attachment_type !== "4") {
+    if (attachmentType !== "4") {
       const storageRef = ref(storage, file.originalname);
       await uploadBytes(storageRef, file.buffer);
       url = await getDownloadURL(storageRef);
     }
-
-    const result = await handleDatabaseError(
-      async () =>
-        await db("journal").returning('jid').insert({
-          tid,
-          published_at,
-          attachment_type,
-          attachment: url,
-          description,
-        })
-    );
+    const result = await db("journal").returning("journalId").insert({
+      teacherId,
+      publishedAt,
+      attachmentType,
+      attachmentLink: url,
+      description,
+    });
     // console.log(result);
-    const journalinsert = result[0];
+    const insertedJournalId = result[0].journalId;
 
     // console.log(journalinsert);
-
-    const tagsdata = taggedStudents
+    const tagsData = taggedStudents
       .split(",")
       .map(Number)
       .map((studentId) => {
-        return { jid: journalinsert.jid, sid: studentId };
+        return { journalId: insertedJournalId, studentId };
       });
 
-    await handleDatabaseError(
-      async () => await db("tags").returning("sid").insert(tagsdata)
-    );
+    await db("tags").returning("studentId").insert(tagsData);
+
     res.status(200).json({
       success: true,
       message: "Journal creation successfull",
-      attachment_url: url,
+      data: {
+        publishedAt,
+        attachmentType,
+        url,
+        description,
+        taggedStudents,
+      },
     });
   } catch (error) {
     res.status(500).json({
@@ -85,7 +86,7 @@ exports.createJournal = async (req, res) => {
 // reading journals
 exports.getJournals = async (req, res, next) => {
   try {
-    const journals = await handleDatabaseError(async () => await db("journal"));
+    const journals = await db("journal");
     res.status(200).json({
       success: true,
       journals,
@@ -93,30 +94,50 @@ exports.getJournals = async (req, res, next) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      error,
+      error: error.message,
     });
   }
 };
 
 //update journal
-exports.updateJournal = async (req, res, next) => {
-  try {
+exports.updateJournal = async (req, res) => {
+  try {  
+    const journalId = req.params.id;
     let updateData = { ...req.body };
+
+    //check if we are updating a file
     if (req.file) {
       const storageRef = ref(storage, req.file.originalname);
       await uploadBytes(storageRef, req.file.buffer);
       url = await getDownloadURL(storageRef);
-      updateData = { ...updateData, attachment: url };
+      updateData = { ...updateData, attachmentLink: url };
+    }
+    
+    //check if we are updating the tags of the journal
+    if (req.body.taggedStudents) {
+      //delete previous students
+      await db('tags').del().where({journalId});
+
+      //add new students
+      const tagsData = req.body.taggedStudents
+        .split(",")
+        .map(Number)
+        .map((studentId) => {
+          return { journalId, studentId };
+        });
+
+      await db("tags").returning("studentId").insert(tagsData);
+
+      //delete tagged students from updateData because it is not required to be put in journal table
+      delete updateData.taggedStudents;
     }
 
-    const journalId = req.params.id;
-    await handleDatabaseError(async () => {
-      await db("journal")
-        .returning("jid")
-        .where("jid", journalId)
-        .update(updateData);
-    });
 
+    await db("journal")
+      .returning("journalId")
+      .where("journalId", journalId)
+      .update(updateData);
+   
     res.status(200).json({
       success: true,
       message: `Journal with id ${journalId} updated`,
@@ -133,9 +154,7 @@ exports.updateJournal = async (req, res, next) => {
 exports.deleteJournal = async (req, res, next) => {
   try {
     const journalId = req.params.id;
-    await handleDatabaseError(
-      async () => await db("journal").del().where({ jid: journalId })
-    );
+    await db("journal").del().where({ journalId });
 
     res.status(200).json({
       success: true,
@@ -144,7 +163,7 @@ exports.deleteJournal = async (req, res, next) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Internal server error",
+      error: error.message,
     });
   }
 };

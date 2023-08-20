@@ -4,11 +4,10 @@ const db = knex(config.development);
 
 exports.teacherFeed = async (req, res) => {
   try {
-    const tid = req.user.id;
-    console.log(tid);
+    const teacherId = req.user.id;
     const teacherFeed = await db("journal")
-      .where("journal.tid", tid)
-      .select("description", "attachment", "published_at");
+      .where("journal.teacherId", teacherId)
+      .select("description", "attachmentLink", "publishedAt", "journalId");
     res.status(200).json({
       success: true,
       message: "Teacher feed fetched",
@@ -18,39 +17,39 @@ exports.teacherFeed = async (req, res) => {
     res.status(500).json({
       message: "Internal server error",
       success: false,
-      error,
+      error: error.message,
     });
   }
 };
 
 exports.studentFeed = async (req, res, next) => {
     try {
-        const sid = req.user.id;
-        console.log(sid);
-        const studentfeed = await db("tags")
-            .where("tags.sid", sid)
-            .join("journal", "journal.jid", "=", "tags.jid")
+        const studentId = req.user.id;
+        const studentFeed = await db("tags")
+            .where("tags.studentId", studentId)
+            .join("journal", "journal.journalId", "=", "tags.journalId")
             .select(
-                "tags.sid",
+                "tags.studentId",
                 "journal.description",
-                "journal.attachment",
-                "journal.published_at"
+                "journal.attachmentLink",
+                "journal.publishedAt",
+                "journal.journalId",
             );
 
-        const feedforstudent = studentfeed.filter((feed) => {
-            if (new Date() >= new Date(feed.published_at)) return feed;
+        const filteredStudentFeed = studentFeed.filter((feed) => {
+            if (new Date() >= new Date(feed.publishedAt)) return feed;
         });
 
         res.status(200).json({
             success: true,
             message: "Student feed fetched",
-            feedforstudent,
+            studentFeed: filteredStudentFeed,
         });
     } catch (error) {
         res.status(500).json({
             message: "Internal server error",
             success: false,
-            error,
+            error: error.message,
         });
     }
 };

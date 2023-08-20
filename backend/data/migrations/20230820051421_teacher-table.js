@@ -1,8 +1,8 @@
 exports.up = function (knex) {
     return knex.schema.createTable('teacher', function (table) {
-        table.increments('tid').primary();
-        table.string('teacher_name').notNullable();
-        table.string('teacher_pwd');
+        table.increments('teacherId').primary();
+        table.string('teacherName').notNullable();
+        table.string('teacherPwd').notNullable();
     });
 };
 

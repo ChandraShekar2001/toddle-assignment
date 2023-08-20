@@ -1,7 +1,6 @@
 const knex = require("knex");
 const config = require("../knexfile");
 const db = knex(config.development);
-const { handleDatabaseError } = require("../utils/handleDatabaseErrors");
 const { generateAndSendToken } = require("../utils/generateToken");
 
 exports.register = async (req, res, next) => {
@@ -26,12 +25,10 @@ exports.register = async (req, res, next) => {
 
     //check if the user exists
     if (role === "teacher") {
-      const result = await handleDatabaseError(
-        async () => await db("teacher").where({ teacher_name: name })
-      );
+      const result = await db("teacher").where({ teacherName: name });
       if (result.length > 0) {
-        const tid = result[0].tid;
-        const dbPassword = result[0].teacher_pwd;
+        const teacherId = result[0].teacherId;
+        const dbPassword = result[0].teacherPwd;
         console.log(dbPassword);
         if (dbPassword !== password) {
           return res.status(401).json({
@@ -39,25 +36,22 @@ exports.register = async (req, res, next) => {
             message: "The password you entered is incorrect.",
           });
         }
-        generateAndSendToken(tid, "teacher", res);
+        generateAndSendToken(teacherId, "teacher", res);
       } else {
-        const result = await handleDatabaseError(
-          async () =>
-            await db("teacher").returning("tid").insert({
-              teacher_name: name,
-              teacher_pwd: password,
-            })
-        );
-        const newId = result[0].tid;
+        const result = await db("teacher").returning("teacherId").insert({
+          teacherName: name,
+          teacherPwd: password,
+        });
+
+        const newId = result[0].teacherId;
         generateAndSendToken(newId, "teacher", res);
       }
     } else {
-      const result = await handleDatabaseError(
-        async () => await db("student").where({ student_name: name })
-      );
+      const result = await db("student").where({ studentName: name });
+
       if (result.length > 0) {
-        const id = result[0].sid;
-        const dbPassword = result[0].student_pwd;
+        const id = result[0].studentId;
+        const dbPassword = result[0].studentPwd;
         if (dbPassword !== password) {
           return res.status(401).json({
             success: false,
@@ -66,21 +60,19 @@ exports.register = async (req, res, next) => {
         }
         generateAndSendToken(id, "student", res);
       } else {
-        const result = await handleDatabaseError(
-          async () =>
-            await db("student").returning("sid").insert({
-              student_name: name,
-              student_pwd: password,
-            })
-        );
-        const newId = result[0].sid;
+        const result = await db("student").returning("studentId").insert({
+          studentName: name,
+          studentPwd: password,
+        });
+
+        const newId = result[0].studentId;
         generateAndSendToken(newId, "student", res);
       }
     }
   } catch (error) {
     res.status(500).json({
       success: false,
-      error,
+      error: error.message,
     });
   }
 };
